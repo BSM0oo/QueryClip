@@ -1,0 +1,43 @@
+# YouTube Notes App
+
+A web application for taking structured notes while watching YouTube videos. Features include screenshot capture, AI-powered captions, comprehensive transcript analysis, and polished export options for creating study materials and documentation.
+
+## Project Structure
+
+```
+youtube-notes-app/
+├── frontend/                # React frontend application
+│   ├── src/
+│   │   ├── components/     # React components
+│   │   │   ├── YouTubePlayer.jsx            # Video player component
+│   │   │   ├── EnhancedScreenshotManager.jsx # Screenshot capture handling
+│   │   │   ├── TranscriptViewer.jsx         # Transcript display and navigation
+│   │   │   ├── NotesManager.jsx             # Notes and export management
+│   │   │   ├── GifCaptureManager.jsx        # GIF capture functionality
+│   │   │   ├── DraggableGalleryGrid.jsx     # Draggable grid layout
+│   │   │   ├── EnhancedScreenshotGallery.jsx # Screenshot organization
+│   │   │   ├── GalleryControls.jsx          # Gallery control buttons
+│   │   │   ├── GalleryGrid.jsx              # Grid layout component
+│   │   │   ├── PromptResponseCard.jsx       # AI response display
+│   │   │   ├── ScreenshotCard.jsx           # Screenshot display card
+│   │   │   ├── TranscriptPrompt.jsx         # Transcript interaction
+│   │   │   ├── VideoInfoViewer.jsx          # Video metadata display
+│   │   │   └── FullTranscriptViewer.jsx     # Full transcript display
+│   │   ├── components/ui/  # Shadcn UI components
+│   │   │   ├── button.jsx  # Button component
+│   │   │   ├── card.jsx    # Card component
+│   │   │   ├── input.jsx   # Input component
+│   │   │   └── label.jsx   # Label component
+│   │   ├── styles/         # Styling
+│   │   │   ├── globals.css # Global styles and Tailwind
+│   │   │   └── ExportStyles.css # Export and print styling
+│   │   ├── utils/          # Utility functions
+│   │   │   └── exportUtils.js # Export generation utilities
+│   │   ├── App.jsx         # Main application component
+│   │   ├── config.js       # Configuration settings
+│   │   └── main.jsx        # Application entry point
+├── modules/                # Backend modules
+│   └── gif_capture.py      # GIF capture functionality
+├── main.py                 # Python backend server
+└── README.md              # Documentation
+```

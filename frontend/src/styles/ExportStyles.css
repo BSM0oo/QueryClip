@@ -1,0 +1,276 @@
+/* ExportStyles.css */
+
+/* Base styles for both screen and print */
+:root {
+    --primary-text: #1a1a1a;
+    --secondary-text: #4a5568;
+    --accent-color: #6366f1;
+    --border-color: #e2e8f0;
+    --background: #ffffff;
+    --timestamp-color: #555;
+}
+
+/* Common styles */
+.export-container {
+    max-width: 800px;
+    margin: 0 auto;
+    padding: 2rem;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    line-height: 1.5;
+    color: var(--primary-text);
+}
+
+/* Title and headings */
+.export-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: #4338ca;
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 4px solid #e5e7eb;
+}
+
+.export-subtitle {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--primary-text);
+    margin: 2rem 0 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 2px solid var(--border-color);
+}
+
+/* Video metadata */
+.metadata {
+    background-color: #f8fafc;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin-bottom: 2rem;
+    font-size: 0.95rem;
+    color: var(--secondary-text);
+}
+
+/* Screenshots section */
+.screenshot-container {
+    background: #ffffff;
+    border: 1px solid var(--border-color);
+    border-radius: 0.5rem;
+    margin: 2rem 0;
+    overflow: hidden;
+    page-break-inside: avoid;
+}
+
+.screenshot-image {
+    width: 100%;
+    max-height: 500px;
+    object-fit: contain;
+    display: block;
+}
+
+.screenshot-caption {
+    padding: 1rem;
+    font-size: 0.95rem;
+    line-height: 1.5;
+}
+
+.screenshot-caption ul {
+    list-style-type: none;
+    padding: 0;
+    margin: 0.5rem 0;
+}
+
+.screenshot-caption li {
+    margin: 0.5rem 0;
+    padding-left: 1rem;
+    position: relative;
+}
+
+.screenshot-caption li:before {
+    content: "•";
+    position: absolute;
+    left: 0;
+}
+
+/* Query section */
+.query-container {
+    background: #f0f7ff;
+    border-radius: 0.5rem;
+    padding: 1rem;
+    margin: 2rem 0;
+    border-left: 4px solid #3b82f6;
+    page-break-inside: avoid;
+}
+
+.query-text {
+    font-weight: 500;
+    color: #1e40af;
+    margin-bottom: 0.5rem;
+}
+
+/* Transcript outline */
+.transcript-analysis {
+    white-space: pre-wrap;
+    font-size: 0.95rem;
+    line-height: 1.6;
+}
+
+.transcript-analysis ul {
+    list-style-type: none;
+    padding-left: 1.5rem;
+    margin: 0.5rem 0;
+}
+
+.transcript-analysis li {
+    margin: 0.5rem 0;
+    position: relative;
+}
+
+.transcript-analysis li:before {
+    content: "•";
+    position: absolute;
+    left: -1rem;
+}
+
+/* Print-specific styles */
+@media print {
+    @page {
+        margin: 0.5in;
+        size: letter portrait;
+    }
+
+    body {
+        font-family: "Times New Roman", serif;
+        font-size: 10pt;
+        line-height: 1.3;
+        background: white;
+        color: black;
+        width: 100% !important;
+        max-width: 380px !important;
+        margin: 0 auto !important;
+    }
+
+    .export-container {
+        max-width: 100% !important;
+        margin: 0 auto !important;
+        padding: 0 !important;
+        width: 100% !important;
+    }
+
+    /* Title styling */
+    .export-title {
+        font-size: 24pt;
+        border-bottom: 1pt solid #000;
+        margin-bottom: 0.5in;
+        padding-bottom: 0.25in;
+        page-break-after: avoid;
+    }
+
+    /* Section breaks */
+    .section-break {
+        page-break-before: always;
+        margin-top: 1in;
+    }
+
+    /* Screenshot handling */
+    .screenshot-container {
+        page-break-inside: avoid;
+        page-break-before: auto;
+        margin: 0.5in 0;
+        border: none;
+    }
+
+    .screenshot-image {
+        max-height: 7in;
+        width: auto;
+        max-width: 100%;
+        margin: 0 auto;
+    }
+
+    .screenshot-caption {
+        padding: 0.25in 0;
+    }
+
+    /* Query styling */
+    .query-container {
+        page-break-inside: avoid;
+        background: none;
+        border: 1pt solid #000;
+        border-left: 4pt solid #000;
+        padding: 0.25in;
+        margin: 0.25in 0;
+    }
+
+    /* Content sizing */
+    p, li {
+        line-height: 1.6;
+        margin-bottom: 0.2in;
+    }
+
+    /* Header styling */
+    h1, h2, h3 {
+        page-break-after: avoid;
+    }
+
+    h1 {
+        font-size: 18pt;
+        margin-top: 0.5in;
+    }
+
+    h2 {
+        font-size: 14pt;
+        margin-top: 0.3in;
+    }
+
+    /* Page breaks */
+    .transcript-section,
+    .screenshot-section {
+        page-break-before: always;
+    }
+
+    .screenshot-pair {
+        page-break-inside: avoid;
+        margin: 0.5in 0;
+    }
+
+    /* Lists */
+    ul, ol {
+        margin: 0.2in 0;
+    }
+
+    /* Link handling */
+    a {
+        text-decoration: none;
+        color: black;
+    }
+
+    a[href^="http"]:after {
+        content: " (" attr(href) ")";
+        font-size: 10pt;
+        color: #666;
+    }
+
+    /* Hide interactive elements */
+    .no-print {
+        display: none !important;
+    }
+
+    /* Ensure headers stay with their content */
+    h1 + p,
+    h2 + p,
+    h3 + p {
+        page-break-before: avoid;
+    }
+
+    /* Timestamps */
+    .timestamp {
+        font-family: "Courier New", monospace;
+        color: #444;
+        padding-right: 0.1in;
+    }
+
+    /* Add page numbers */
+    @page {
+        @bottom-center {
+            content: counter(page);
+        }
+    }
+}

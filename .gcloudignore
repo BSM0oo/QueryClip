@@ -1,0 +1,26 @@
+# .gcloudignore
+# This file specifies files that are NOT uploaded to Google Cloud Platform
+# when you deploy using `gcloud app deploy`.
+
+# Ignore the .env file to prevent sensitive information from being uploaded
+.env
+
+# Python-specific files
+*.pyc
+__pycache__/
+
+# Node-specific files
+node_modules/
+
+# Docker-specific files
+Dockerfile
+docker-compose.yml
+
+# General files
+.git
+.gitignore
+.DS_Store
+.vscode/
+.idea/
+*.log
+*.swp
