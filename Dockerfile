@@ -49,7 +49,7 @@ RUN mkdir -p static && \
     chmod -R 755 static && \
     ls -la static/  # Debug: List copied files
 
-# Expose port 8000
+# Expose port 8080
 EXPOSE 8080
 
 # Command to run the application with debug logging

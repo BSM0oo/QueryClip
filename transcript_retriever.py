@@ -1,129 +1,112 @@
-import json
-import re
-from typing import Optional, Dict, Any, List
-import requests
+#!/usr/bin/env python3
+"""
+Enhanced transcript retriever with improved error handling
+"""
+
+import asyncio
 from youtube_transcript_api import YouTubeTranscriptApi
 from youtube_transcript_api._errors import TranscriptsDisabled, NoTranscriptFound
+import logging
+
+logger = logging.getLogger(__name__)
 
 class EnhancedTranscriptRetriever:
+    """Enhanced transcript retriever that handles multiple languages and exceptions gracefully"""
+    
     def __init__(self):
-        self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-        })
+        self.languages = ['en', 'en-US', 'en-GB', 'auto']
+    
+    async def get_transcript(self, video_id):
+        """
+        Attempt to get transcript for video with improved error handling
         
-    def _get_video_info(self, video_id: str) -> Dict[str, Any]:
-        """Get video info using YouTube's internal API."""
+        Args:
+            video_id (str): YouTube video ID
+            
+        Returns:
+            list: List of transcript segments
+            
+        Raises:
+            Exception: If transcript retrieval fails
+        """
         try:
-            url = f"https://www.youtube.com/watch?v={video_id}"
-            response = self.session.get(url)
-            response.raise_for_status()
-            
-            # Extract ytInitialData from the page
-            data_match = re.search(r"ytInitialData\s*=\s*({.+?});", response.text)
-            if data_match:
-                return json.loads(data_match.group(1))
-            
-            # Try alternative pattern
-            data_match = re.search(r"var\s+ytInitialData\s*=\s*({.+?});", response.text)
-            if data_match:
-                return json.loads(data_match.group(1))
-                
-            return {}
-        except Exception as e:
-            print(f"Error getting video info: {e}")
-            return {}
-
-    def _extract_captions_url(self, video_info: Dict[str, Any]) -> Optional[str]:
-        """Extract captions URL from video info."""
-        try:
-            # Navigate through the ytInitialData structure to find captions URL
-            if 'captions' in video_info:
-                captions_data = video_info['captions']
-                player_captions = captions_data.get('playerCaptionsTracklistRenderer', {})
-                caption_tracks = player_captions.get('captionTracks', [])
-                
-                # First try to find auto-generated English captions
-                for track in caption_tracks:
-                    if track.get('kind') == 'asr' and track.get('languageCode') == 'en':
-                        return track.get('baseUrl')
-                
-                # If no auto-generated English captions, try any English captions
-                for track in caption_tracks:
-                    if track.get('languageCode') == 'en':
-                        return track.get('baseUrl')
-                
-                # If no English captions, take the first available
-                if caption_tracks:
-                    return caption_tracks[0].get('baseUrl')
-            
+            return await self._get_transcript_with_retries(video_id)
+        except TranscriptsDisabled:
+            logger.warning(f"Transcripts are disabled for video {video_id}")
+            return None
+        except NoTranscriptFound:
+            logger.warning(f"No transcript found for video {video_id}")
             return None
         except Exception as e:
-            print(f"Error extracting captions URL: {e}")
-            return None
-
-    def _parse_caption_data(self, caption_data: Dict[str, Any]) -> List[Dict[str, Any]]:
-        """Parse caption data into transcript format."""
-        transcript = []
-        try:
-            for event in caption_data.get('events', []):
-                if 'segs' in event:
-                    text = ' '.join(seg.get('utf8', '') for seg in event['segs'])
-                    if text.strip():
-                        transcript.append({
-                            'text': text.strip(),
-                            'start': event.get('tStartMs', 0) / 1000,
-                            'duration': event.get('dDurationMs', 0) / 1000
-                        })
-        except Exception as e:
-            print(f"Error parsing caption data: {e}")
-        return transcript
-
-    async def get_transcript(self, video_id: str) -> List[Dict[str, Any]]:
-        """Get transcript with multiple fallback methods."""
-        transcript = []
+            logger.error(f"Error retrieving transcript for video {video_id}: {str(e)}")
+            raise
+    
+    async def _get_transcript_with_retries(self, video_id):
+        """Try to get transcript in different languages with retries"""
+        errors = []
         
-        # Method 1: Try youtube_transcript_api first
-        try:
-            print(f"Attempting to get transcript via youtube_transcript_api...")
-            transcript = YouTubeTranscriptApi.get_transcript(video_id)
-            return transcript
-        except (TranscriptsDisabled, NoTranscriptFound) as e:
-            print(f"Standard transcript retrieval failed: {e}")
+        # Try different language options
+        for lang in self.languages:
+            try:
+                logger.info(f"Attempting to get transcript for {video_id} in language: {lang}")
+                if lang == 'auto':
+                    transcript = YouTubeTranscriptApi.get_transcript(video_id)
+                else:
+                    transcript = YouTubeTranscriptApi.get_transcript(video_id, languages=[lang])
+                
+                # Clean and process transcript
+                return self._process_transcript(transcript)
+            except Exception as e:
+                errors.append(f"Failed with language {lang}: {str(e)}")
+                continue
         
-        # Method 2: Try to get auto-generated transcript
-        try:
-            print(f"Attempting to get auto-generated transcript...")
-            transcript_list = YouTubeTranscriptApi.list_transcripts(video_id)
-            transcript = transcript_list.find_generated_transcript(['en']).fetch()
-            return transcript
-        except Exception as e:
-            print(f"Auto-generated transcript retrieval failed: {e}")
-        
-        # Method 3: Try direct API approach
-        try:
-            print(f"Attempting direct API approach...")
-            video_info = self._get_video_info(video_id)
-            captions_url = self._extract_captions_url(video_info)
+        # If we get here, all attempts failed
+        error_msg = "\n".join(errors)
+        logger.error(f"All transcript retrieval attempts failed: {error_msg}")
+        raise Exception(f"Failed to retrieve transcript after trying languages {self.languages}")
+    
+    def _process_transcript(self, transcript):
+        """Process and clean transcript data"""
+        # Return empty result for None input
+        if transcript is None:
+            return []
             
-            if captions_url:
-                print(f"Found captions URL, fetching transcript...")
-                response = self.session.get(captions_url)
-                response.raise_for_status()
+        # Format transcript entries
+        processed = []
+        for entry in transcript:
+            # Extract relevant fields
+            item = {
+                'text': entry.get('text', ''),
+                'start': entry.get('start', 0),
+                'duration': entry.get('duration', 0)
+            }
+            
+            # Skip empty text entries
+            if not item['text'].strip():
+                continue
                 
-                # Parse the timedtext format
-                if response.headers.get('content-type', '').startswith('application/json'):
-                    transcript = self._parse_caption_data(response.json())
-                elif 'xml' in response.headers.get('content-type', ''):
-                    # Handle XML format if needed
-                    print("XML format detected - implementation needed")
-                    pass
-                
-                if transcript:
-                    return transcript
-                
+            processed.append(item)
+            
+        return processed
+
+# For testing this implementation directly
+if __name__ == "__main__":
+    import sys
+    
+    async def test_retriever(video_id):
+        retriever = EnhancedTranscriptRetriever()
+        try:
+            transcript = await retriever.get_transcript(video_id)
+            if transcript:
+                print(f"Successfully retrieved {len(transcript)} transcript segments")
+                print(f"Sample: {transcript[:2]}")
+            else:
+                print("No transcript available for this video")
         except Exception as e:
-            print(f"Direct API transcript retrieval failed: {e}")
-        
-        # If all methods fail, raise an exception
-        raise NoTranscriptFound(video_id, "No transcript could be retrieved using any available method")
+            print(f"Error: {str(e)}")
+    
+    if len(sys.argv) > 1:
+        video_id = sys.argv[1]
+        asyncio.run(test_retriever(video_id))
+    else:
+        print("Usage: python transcript_retriever.py VIDEO_ID")

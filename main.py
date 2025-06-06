@@ -35,9 +35,7 @@ from PIL import Image, ImageOps
 import pytesseract
 import io
 from PIL import ImageDraw, ImageFont
-import asyncio
 from fastapi.staticfiles import StaticFiles
-from pathlib import Path
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 import copy
@@ -522,7 +520,7 @@ async def delete_video_history_item(video_id: str):
 async def get_transcript(video_id: str):
     """Get transcript for a YouTube video using enhanced retrieval system"""
     try:
-        print(f"Attempting to get transcript for video ID: {video_id}")
+        logger.info(f"Attempting to get transcript for video ID: {video_id}")
         
         transcript_retriever = EnhancedTranscriptRetriever()
         transcript = await transcript_retriever.get_transcript(video_id)
@@ -536,14 +534,14 @@ async def get_transcript(video_id: str):
             )
             
     except Exception as e:
-        print(f"Transcript error: {str(e)}")
+        logger.error(f"Transcript error: {str(e)}")
         error_msg = f"Could not get transcript: {str(e)}"
         
         # Handle NoTranscriptFound exceptions more gracefully
         if "NoTranscriptFound" in str(e) or "No transcript found" in str(e):
             error_msg = "No transcript/captions available for this video"
         
-        print(f"Returning error: {error_msg}")
+        logger.error(f"Returning error: {error_msg}")
         raise HTTPException(status_code=404, detail=error_msg)
 
 @app.post("/api/cleanup-screenshots")
@@ -1015,9 +1013,6 @@ async def save_state(state: dict):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
-import asyncio
-import time
-from datetime import datetime, timedelta
 
 # Add a rate limiter for API calls
 class RateLimiter:
@@ -1418,7 +1413,7 @@ async def get_video_information(video_id: str):
                 # First try to get existing transcript to save it
                 try:
                     transcript_retriever = EnhancedTranscriptRetriever()
-                    transcript_data = transcript_retriever.get_transcript(video_id)
+                    transcript_data = await transcript_retriever.get_transcript(video_id)
                     plain_transcript = ' '.join([item.get('text', '') for item in transcript_data]) if transcript_data else None
                 except Exception as transcript_error:
                     logger.warning(f"Could not get transcript for {video_id}: {transcript_error}")
@@ -1615,16 +1610,6 @@ Follow these rules at all costs.
         logger.error(f"Outer error in generate_structured_caption: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error generating caption: {str(e)}")
 
-@app.get("/api/config")
-async def get_config():
-    """Return client-safe configuration settings"""
-    return {
-        "serverPort": SERVER_PORT,
-        "apiVersion": "1.0",
-        "hasAnthropicKey": bool(os.getenv('ANTHROPIC_API_KEY')),
-        "hasYoutubeKey": bool(os.getenv('YOUTUBE_API_KEY')),
-        "hasNotionKey": bool(os.getenv('NOTION_API_KEY'))
-    }
 
 @app.options("/api/{rest_of_path:path}")
 async def options_route(rest_of_path: str):

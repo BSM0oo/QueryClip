@@ -36,9 +36,10 @@ def export_to_pdf(content: str) -> Response:
                     if img_data.startswith('data:image'):
                         # Remove header from base64 string
                         img_data = img_data.split(',')[1]
-                        # Save image to temporary file
+                        # Save image to temporary buffer with name attribute
                         img_temp = io.BytesIO(base64.b64decode(img_data))
-                        pdf.image(img_temp, x=10, w=190)
+                        img_temp.name = 'image.png'
+                        pdf.image(img_temp, x=10, w=190, type='PNG')
                 except Exception as e:
                     print(f"Error processing image: {e}")
             else:
