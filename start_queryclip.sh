@@ -13,22 +13,8 @@ NGROK_DOMAIN="BSM0oo.ngrok.dev"
 cd ""
 
 # Activate virtual environment
-source venv/bin/activate
+source new_venv/bin/activate
 
-# Start QueryClip in the background
+# Start QueryClip in the foreground
 echo "Starting QueryClip..."
-python3 main.py &
-QUERYCLIP_PID=0
-
-# Give QueryClip a moment to start
-sleep 2
-
-# Start ngrok with the reserved domain
-echo "Starting ngrok with reserved domain: "
-ngrok http --url="" 
-# # to start, ngrok http 8991 --domain=BSM0oo.ngrok.io
-
-
-# When ngrok is stopped (Ctrl+C), also stop QueryClip
-kill 
-echo "QueryClip stopped."
+uvicorn main:app --host 0.0.0.0 --port 8991 --reload

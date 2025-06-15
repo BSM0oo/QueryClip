@@ -130,6 +130,7 @@ def cleanup_old_screenshots():
         raise HTTPException(status_code=500, detail=str(e))
 
 # Initialize Anthropic client
+load_dotenv(override=True)
 anthropic = Anthropic(
     api_key=os.getenv('ANTHROPIC_API_KEY')
 )
@@ -522,13 +523,16 @@ async def delete_video_history_item(video_id: str):
 async def get_transcript(video_id: str):
     """Get transcript for a YouTube video using enhanced retrieval system"""
     try:
-        print(f"Attempting to get transcript for video ID: {video_id}")
+        logger.info(f"Attempting to get transcript for video ID: {video_id}")
         
-        transcript_retriever = EnhancedTranscriptRetriever()
-        transcript = await transcript_retriever.get_transcript(video_id)
+        retriever = EnhancedTranscriptRetriever(api_key=os.getenv('YOUTUBE_API_KEY'), verbose=True)
         
-        if transcript:
-            return {"transcript": transcript}
+        # The new retriever's get_transcript method expects a URL, not just a video ID.
+        url = f"https://www.youtube.com/watch?v={video_id}"
+        transcript_data = retriever.extract_transcript(url)
+        
+        if transcript_data and transcript_data.get('segments'):
+            return {"transcript": transcript_data['segments']}
         else:
             raise HTTPException(
                 status_code=404,
@@ -536,14 +540,14 @@ async def get_transcript(video_id: str):
             )
             
     except Exception as e:
-        print(f"Transcript error: {str(e)}")
+        logger.error(f"Transcript error: {str(e)}")
         error_msg = f"Could not get transcript: {str(e)}"
         
         # Handle NoTranscriptFound exceptions more gracefully
         if "NoTranscriptFound" in str(e) or "No transcript found" in str(e):
             error_msg = "No transcript/captions available for this video"
         
-        print(f"Returning error: {error_msg}")
+        logger.error(f"Returning error: {error_msg}")
         raise HTTPException(status_code=404, detail=error_msg)
 
 @app.post("/api/cleanup-screenshots")
