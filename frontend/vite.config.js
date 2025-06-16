@@ -36,7 +36,7 @@ export default defineConfig({
     host: '0.0.0.0', // Allow connections from other devices on the network
     proxy: {
       '/api': {
-        target: `http://localhost:${serverPort}`,
+        target: `http://127.0.0.1:${serverPort}`,
         changeOrigin: true,
         secure: false
       }

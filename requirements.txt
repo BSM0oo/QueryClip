@@ -20,3 +20,4 @@ moviepy>=1.0.3
 #brew install tesseract
 openai-whisper
 webvtt-py
+google-generativeai

@@ -13,7 +13,8 @@ const NotesManager = ({
   onNotesChange,
   screenshots,
   transcriptAnalysis,
-  transcript
+  transcript,
+  children
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
@@ -521,6 +522,7 @@ const NotesManager = ({
               Note: PDF export will open your system print dialog. Select "Save as PDF" option.
             </p>
           </div>
+          {children}
         </div>
       )}
     </div>

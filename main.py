@@ -21,6 +21,7 @@ import uuid
 import asyncio
 from playwright.async_api import async_playwright
 from anthropic import Anthropic
+import google.generativeai as genai
 from dotenv import load_dotenv
 from transcript_retriever import EnhancedTranscriptRetriever
 from modules.gif_capture import GifCapture
@@ -135,6 +136,9 @@ anthropic = Anthropic(
     api_key=os.getenv('ANTHROPIC_API_KEY')
 )
 
+# Initialize Gemini client
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
 # Initialize GIF capture
 gif_capture = GifCapture()
 
@@ -224,6 +228,7 @@ class CaptionRequest(BaseModel):
     image_data: str
     transcript_context: str
     prompt: Optional[str] = None
+    model: Optional[str] = "claude-3-haiku-20240307"
 
 class VideoFrameAnalysisRequest(BaseModel):
     video_id: str
@@ -241,16 +246,19 @@ class QuestionRequest(BaseModel):
     transcript: str
     question: str
     timestamp: float
+    model: Optional[str] = "claude-3-haiku-20240307"
 
 class TranscriptAnalysisRequest(BaseModel):
-    transcript: str
+    transcript: List[Dict[str, Any]]
     videoId: Optional[str] = None
+    model: Optional[str] = "claude-3-haiku-20240307"
 
 # Add this class with the existing BaseModel classes
 class TranscriptQueryRequest(BaseModel):
     transcript: list
     prompt: str
     videoId: Optional[str] = None
+    model: Optional[str] = "claude-3-5-sonnet-20240620"
     
 class NotionSaveRequest(BaseModel):
     title: str
@@ -1064,7 +1072,7 @@ async def generate_caption_api(screenshot: CaptionRequest):
         base_prompt = screenshot.prompt if screenshot.prompt else """Generate a concise and informative caption for this moment in the video.
             The caption should be a direct statement about the key point, without referring to the video or transcript."""
 
-        logger.info("Constructing prompt for Anthropic API")
+        logger.info("Constructing prompt for AI API")
         prompt = f"""Here is the transcript context around timestamp {screenshot.timestamp}:
 
 {transcript_text}
@@ -1093,27 +1101,25 @@ For example, format your response exactly like this:
 
 Caption:"""
 
-        # Check if ANTHROPIC_API_KEY is set
-        api_key = os.getenv('ANTHROPIC_API_KEY')
-        if not api_key:
-            logger.error("ANTHROPIC_API_KEY is not set in environment variables")
-            return {"caption_error": "Missing API key", "caption": "Caption generation failed: API key not configured"}
-            
-        logger.info("Sending request to Anthropic API")
+        logger.info("Sending request to AI API")
         try:
             # Apply rate limiting before making API call
             await anthropic_rate_limiter.wait_if_needed()
             
-            response = anthropic.messages.create(
-                model="claude-3-haiku-20240307",
-                max_tokens=150,
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }]
-            )
-            
-            caption = response.content[0].text.strip()
+            if "gemini" in screenshot.model:
+                model = genai.GenerativeModel(screenshot.model)
+                response = model.generate_content(prompt)
+                caption = response.text
+            else:
+                response = anthropic.messages.create(
+                    model=screenshot.model,
+                    max_tokens=150,
+                    messages=[{
+                        "role": "user",
+                        "content": prompt
+                    }]
+                )
+                caption = response.content[0].text.strip()
             
             # Before processing, check if we're dealing with the old format (TOPIC HEADING, etc.)
             if caption.startswith("TOPIC HEADING:") and "KEY POINTS:" in caption:
@@ -1201,27 +1207,42 @@ async def update_video_history_content(video_id: str, content_type: str, content
 async def analyze_transcript(request: TranscriptAnalysisRequest):
     """Analyze video transcript for structure and key points"""
     try:
-        response = anthropic.messages.create(
-            model="claude-3-haiku-20240307",
-            max_tokens=1000,
-            messages=[{
-                "role": "user",
-                "content": f"""Analyze this video transcript and provide:
+        # Format transcript with timestamps for better context
+        formatted_transcript = []
+        for item in request.transcript:
+            if not isinstance(item, dict) or 'start' not in item or 'text' not in item:
+                continue
                 
-                1. A high-level summary of the main topics in bullet points
-                2. Key points and takeaways, comprehensive (bullet points)
-                3. Any important technical terms or concepts mentioned, with accompanying definitions and context. "Term/Concept: Definition. Context of its mention.
-                4. Suggested sections/timestamps for review and bullet point rationale for this recommendation. 
-                - Review your output before finalizing to ensure you have followed these instructions exactly.
-                - Generate a title for the video and begin your output with the title in bold
+            timestamp = float(item['start'])
+            minutes = int(timestamp // 60)
+            seconds = int(timestamp % 60)
+            time_str = f"{minutes:02d}:{seconds:02d}"
+            formatted_transcript.append(f"[{time_str}] {item['text']}")
+            
+        transcript_text = "\n".join(formatted_transcript)
 
-                Transcript:
-                {request.transcript}
-                """
-            }]
-        )
-        
-        analysis = response.content[0].text.strip()
+        prompt = f"""Please generate a concise, well-structured outline of the following video transcript. The outline should be in markdown format, using nested bullet points to represent the structure of the content.
+
+Transcript:
+{transcript_text}
+
+Outline:"""
+
+        if "gemini" in request.model:
+            model = genai.GenerativeModel(request.model)
+            response = model.generate_content(prompt)
+            analysis = response.text
+        else:
+            response = anthropic.messages.create(
+                model=request.model,
+                max_tokens=1000,
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }]
+            )
+            
+            analysis = response.content[0].text.strip()
         
         # Extract video ID from context if available
         # Assuming the request might contain a videoId property
@@ -1256,17 +1277,21 @@ Please provide a clear, concise answer that:
 4. Is formatted in a clear, readable way
 
 Answer:"""
-
-        response = anthropic.messages.create(
-            model="claude-3-haiku-20240307",
-            max_tokens=300,
-            messages=[{
-                "role": "user",
-                "content": prompt
-            }]
-        )
-        
-        answer = response.content[0].text.strip()
+        if "gemini" in request.model:
+            model = genai.GenerativeModel(request.model)
+            response = model.generate_content(prompt)
+            answer = response.text
+        else:
+            response = anthropic.messages.create(
+                model=request.model,
+                max_tokens=300,
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }]
+            )
+            
+            answer = response.content[0].text.strip()
         return {
             "answer": answer,
             "timestamp": request.timestamp,
@@ -1330,21 +1355,25 @@ Example of desired format:
 
 Response:"""
 
-        logger.info("Sending request to Anthropic API")
+        logger.info("Sending request to AI API")
         try:
             # Apply rate limiting before making API call
             await anthropic_rate_limiter.wait_if_needed()
             
-            response = anthropic.messages.create(
-                model="claude-3-5-sonnet-20240620",
-                max_tokens=1000,
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }]
-            )
-            
-            answer = response.content[0].text.strip()
+            if "gemini" in request.model:
+                model = genai.GenerativeModel(request.model)
+                response = model.generate_content(prompt)
+                answer = response.text
+            else:
+                response = anthropic.messages.create(
+                    model=request.model,
+                    max_tokens=1000,
+                    messages=[{
+                        "role": "user",
+                        "content": prompt
+                    }]
+                )
+                answer = response.content[0].text.strip()
             logger.info(f"Got response from Anthropic API: {answer[:50]}...")
             
             # Save the query and answer to history if videoId is provided
@@ -1543,16 +1572,20 @@ Follow these rules at all costs.
             # Apply rate limiting before making API call
             await anthropic_rate_limiter.wait_if_needed()
             
-            response = anthropic.messages.create(
-                model="claude-3-haiku-20240307",
-                max_tokens=150,
-                messages=[{
-                    "role": "user",
-                    "content": prompt
-                }]
-            )
-            
-            caption = response.content[0].text.strip()
+            if "gemini" in screenshot.model:
+                model = genai.GenerativeModel(screenshot.model)
+                response = model.generate_content(prompt)
+                caption = response.text
+            else:
+                response = anthropic.messages.create(
+                    model=screenshot.model,
+                    max_tokens=150,
+                    messages=[{
+                        "role": "user",
+                        "content": prompt
+                    }]
+                )
+                caption = response.content[0].text.strip()
             
             # Before processing, check if we're dealing with the old format (TOPIC HEADING, etc.)
             if caption.startswith("TOPIC HEADING:") and "KEY POINTS:" in caption:
@@ -1619,6 +1652,16 @@ Follow these rules at all costs.
         logger.error(f"Outer error in generate_structured_caption: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error generating caption: {str(e)}")
 
+@app.get("/api/models")
+async def get_models():
+    """Return a list of available AI models"""
+    return {
+        "models": [
+            "claude-3-haiku-20240307",
+            "gemini-1.5-flash",
+        ]
+    }
+
 @app.get("/api/config")
 async def get_config():
     """Return client-safe configuration settings"""
@@ -1627,7 +1670,8 @@ async def get_config():
         "apiVersion": "1.0",
         "hasAnthropicKey": bool(os.getenv('ANTHROPIC_API_KEY')),
         "hasYoutubeKey": bool(os.getenv('YOUTUBE_API_KEY')),
-        "hasNotionKey": bool(os.getenv('NOTION_API_KEY'))
+        "hasNotionKey": bool(os.getenv('NOTION_API_KEY')),
+        "hasGeminiKey": bool(os.getenv('GEMINI_API_KEY'))
     }
 
 @app.options("/api/{rest_of_path:path}")
@@ -1676,17 +1720,6 @@ async def serve_spa(full_path: str):
     # If we get here, something is wrong
     logger.error("Could not find index.html")
     raise HTTPException(status_code=404, detail="Not found")
-
-@app.get("/api/config")
-async def get_config():
-    """Return client-safe configuration settings"""
-    return {
-        "serverPort": SERVER_PORT,
-        "apiVersion": "1.0",
-        "hasAnthropicKey": bool(os.getenv('ANTHROPIC_API_KEY')),
-        "hasYoutubeKey": bool(os.getenv('YOUTUBE_API_KEY')),
-        "hasNotionKey": bool(os.getenv('NOTION_API_KEY'))
-    }
 
 # Save video info to Notion database
 @app.post('/api/save-to-notion')

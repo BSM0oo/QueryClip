@@ -95,13 +95,14 @@ export const captureScreenshot = async (videoId, timestamp, generateCaption = tr
 };
 
 // Generates a caption for a screenshot
-export const generateCaption = async (timestamp, imageData, transcriptContext, prompt = null) => {
+export const generateCaption = async (timestamp, imageData, transcriptContext, prompt = null, model) => {
   try {
     const response = await api.post(getApiUrl('/generate-caption'), {
       timestamp,
       image_data: imageData,
       transcript_context: transcriptContext,
       prompt,
+      model,
     });
     return response.data;
   } catch (error) {
@@ -111,12 +112,13 @@ export const generateCaption = async (timestamp, imageData, transcriptContext, p
 };
 
 // Queries the transcript with a prompt
-export const queryTranscript = async (transcript, prompt, videoId = null) => {
+export const queryTranscript = async (transcript, prompt, videoId = null, model) => {
   try {
     const response = await api.post(getApiUrl('/query-transcript'), {
       transcript,
       prompt,
       videoId, // Include videoId to save to history
+      model,
     });
     return response.data;
   } catch (error) {
@@ -277,12 +279,13 @@ export const saveToNotion = async (title, videoId, data = {}) => {
 };
 
 // Analyzes transcript
-export const analyzeTranscript = async (transcript, videoId = null) => {
+export const analyzeTranscript = async (transcript, videoId = null, model) => {
   try {
     console.log(`Analyzing transcript with videoId: ${videoId || 'none'}`);
     const response = await api.post(getApiUrl('/analyze-transcript'), {
       transcript,
       videoId,  // Include videoId so it can be saved to history
+      model,
     });
     
     // If we have a videoId but no direct save from backend, save it here

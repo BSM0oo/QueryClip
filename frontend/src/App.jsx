@@ -118,6 +118,9 @@ const App = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isTranscriptVisible, setIsTranscriptVisible] = useState(false);
   const [isMainContentVisible, setIsMainContentVisible] = useState(true);
+  const [models, setModels] = useState([]);
+  const [selectedModel, setSelectedModel] = usePersistedState('yt-notes-selectedModel', 'claude-3-haiku-20240307');
+  const [componentOrder, setComponentOrder] = usePersistedState('yt-notes-componentOrder', 'transcriptFirst');
   
   // Update document title when video info changes
   useEffect(() => {
@@ -127,6 +130,20 @@ const App = () => {
       document.title = 'QueryClip';
     }
   }, [videoInfo]);
+
+  useEffect(() => {
+    const fetchModels = async () => {
+      try {
+        const response = await fetch('/api/models');
+        const data = await response.json();
+        setModels(data.models);
+      } catch (error) {
+        console.error('Error fetching models:', error);
+      }
+    };
+
+    fetchModels();
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('eraseFilesOnClear', eraseFiles);
@@ -202,7 +219,8 @@ const App = () => {
               setIsAnalyzing(true);
               const analysisResponse = await analyzeTranscript(
                 transcriptResponse.transcript, 
-                videoIdFromUrl
+                videoIdFromUrl,
+                selectedModel
               );
               setTranscriptAnalysis(analysisResponse.analysis || '');
             } catch (analysisError) {
@@ -650,7 +668,7 @@ const App = () => {
   const handlePromptSubmit = async (prompt) => {
     try {
       // Pass videoId to save to history directly from the API
-      const response = await queryTranscript(transcript, prompt, videoId);
+      const response = await queryTranscript(transcript, prompt, videoId, selectedModel);
       console.log('Query response:', response);
       const newScreenshot = {
         timestamp: currentTime,
@@ -703,33 +721,27 @@ const App = () => {
     }
   };
 
-  const handleAnalysisGenerated = async (analysis) => {
+  const handleAnalysisGenerated = async () => {
     try {
       setIsAnalyzing(true);
-      const response = await queryTranscript(analysis, 'Generate a detailed outline');
-      console.log('Analysis response:', response);
-      const analysisText = response.response || '';
+      setError('');
+      const response = await analyzeTranscript(transcript, videoId, selectedModel);
+      const analysisText = response.analysis || '';
       setTranscriptAnalysis(analysisText);
       
-      // Save transcript analysis to history if video ID is available
       if (videoId) {
         try {
-          // Get current history item
           const historyItem = await getVideoHistoryItem(videoId).catch(() => null);
-          
           if (historyItem) {
-            // Update history item with transcript analysis
             await addOrUpdateVideoHistory({
               ...historyItem,
               transcriptAnalysis: analysisText,
               lastAccessedAt: new Date().toISOString()
             });
-            
             console.log('Updated history with transcript analysis');
           }
         } catch (historyError) {
           console.error('Error updating history with transcript analysis:', historyError);
-          // Continue without failing if history update fails
         }
       }
     } catch (error) {
@@ -993,106 +1005,275 @@ const App = () => {
           ) : (
             // Normal or full-width layout
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-2 sm:gap-4 w-full">
-              <div className="space-y-4 flex flex-col">
-                <div>
-                  <EnhancedScreenshotManager
-                    videoId={videoId}
-                    player={player}
-                    transcript={transcript}
-                    onScreenshotsTaken={handleScreenshotsTaken}
-                    customPrompt={customPrompt}
-                    detectedScenes={detectedScenes}
-                    onScenesDetected={setDetectedScenes}
-                  />
-                </div>
-              </div>
-
-              <div className="h-full space-y-4">
-                <div className="bg-white rounded-lg p-4 border">
-                  <div className="flex flex-col gap-4">
-                    <div className="flex justify-between items-center">
-                      <h2 className="text-xl font-bold">Transcript Controls</h2>
-                      {transcript.length > 0 && (
-                        <div className="flex gap-2">
-                          <button
-                            onClick={() => handleAnalysisGenerated(transcript)}
-                            className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
-                            disabled={isAnalyzing}
-                          >
-                            {isAnalyzing ? 'Generating...' : 'Generate Outline'}
-                          </button>
-                          <button
-                            onClick={() => setIsTranscriptVisible(!isTranscriptVisible)}
-                            className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-sm"
-                          >
-                            {isTranscriptVisible ? 'Hide Transcript' : 'Show Transcript'}
-                          </button>
-                        </div>
-                      )}
+              {componentOrder === 'transcriptFirst' ? (
+                <>
+                  <div className="space-y-4 flex flex-col">
+                    <div>
+                      <EnhancedScreenshotManager
+                        videoId={videoId}
+                        player={player}
+                        transcript={transcript}
+                        onScreenshotsTaken={handleScreenshotsTaken}
+                        customPrompt={customPrompt}
+                        detectedScenes={detectedScenes}
+                        onScenesDetected={setDetectedScenes}
+                      />
                     </div>
-                    {transcript.length > 0 && (
-                      <TranscriptPrompt onSubmit={handlePromptSubmit} />
-                    )}
                   </div>
-                </div>
+                  <div className="h-full space-y-4">
+                    <div className="bg-white rounded-lg p-4 border">
+                      <div className="flex flex-col gap-4">
+                        <div className="flex justify-between items-center">
+                          <h2 className="text-xl font-bold">Transcript Controls</h2>
+                          {transcript.length > 0 && (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleAnalysisGenerated(transcript)}
+                                className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
+                                disabled={isAnalyzing}
+                              >
+                                {isAnalyzing ? 'Generating...' : 'Generate Outline'}
+                              </button>
+                              <button
+                                onClick={() => setIsTranscriptVisible(!isTranscriptVisible)}
+                                className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-sm"
+                              >
+                                {isTranscriptVisible ? 'Hide Transcript' : 'Show Transcript'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {transcript.length > 0 && (
+                          <TranscriptPrompt onSubmit={handlePromptSubmit} />
+                        )}
+                      </div>
+                    </div>
 
-                {isTranscriptVisible && (
-                  <TranscriptViewer
-                    transcript={transcript}
-                    currentTime={currentTime}
-                    onTimeClick={(time) => player?.seekTo(time)}
-                    onAnalysisGenerated={handleAnalysisGenerated}
-                    className="bg-white rounded-lg h-[600px] overflow-auto"
-                  />
-                )}
+                    {isTranscriptVisible && (
+                      <TranscriptViewer
+                        transcript={transcript}
+                        currentTime={currentTime}
+                        onTimeClick={(time) => player?.seekTo(time)}
+                        onAnalysisGenerated={handleAnalysisGenerated}
+                        className="bg-white rounded-lg h-[600px] overflow-auto"
+                      />
+                    )}
 
-                <div className="mt-4">
-                  <NotesManager
-                    title="Notes & Export Options"
-                    showButtonText={isNotesVisible => 
-                      isNotesVisible ? 'Hide Notes & Export Options' : 'Show Notes & Export Options'
-                    }
-                    videoId={videoId}
-                    videoTitle={videoInfo?.title}
-                    videoDescription={videoInfo?.description}
-                    notes={notes}
-                    onNotesChange={(newNotes) => {
-                      setNotes(newNotes);
-                      
-                      // Also save to history if video ID is available
-                      if (videoId) {
-                        // Use a debounced approach to avoid too many API calls
-                        if (window.notesSaveTimeout) {
-                          clearTimeout(window.notesSaveTimeout);
+                    <div className="mt-4">
+                      <NotesManager
+                        title="Notes & Export Options"
+                        showButtonText={isNotesVisible => 
+                          isNotesVisible ? 'Hide Notes & Export Options' : 'Show Notes & Export Options'
                         }
-                        window.notesSaveTimeout = setTimeout(async () => {
-                          try {
-                            // Get current history item
-                            const historyItem = await getVideoHistoryItem(videoId).catch(() => null);
-                            
-                            if (historyItem) {
-                              // Update history item with notes
-                              await addOrUpdateVideoHistory({
-                                ...historyItem,
-                                notes: newNotes,
-                                lastAccessedAt: new Date().toISOString()
-                              });
-                              
-                              console.log('Updated history with notes');
+                        videoId={videoId}
+                        videoTitle={videoInfo?.title}
+                        videoDescription={videoInfo?.description}
+                        notes={notes}
+                        onNotesChange={(newNotes) => {
+                          setNotes(newNotes);
+                          
+                          // Also save to history if video ID is available
+                          if (videoId) {
+                            // Use a debounced approach to avoid too many API calls
+                            if (window.notesSaveTimeout) {
+                              clearTimeout(window.notesSaveTimeout);
                             }
-                          } catch (historyError) {
-                            console.error('Error updating history with notes:', historyError);
-                            // Continue without failing if history update fails
+                            window.notesSaveTimeout = setTimeout(async () => {
+                              try {
+                                // Get current history item
+                                const historyItem = await getVideoHistoryItem(videoId).catch(() => null);
+                                
+                                if (historyItem) {
+                                  // Update history item with notes
+                                  await addOrUpdateVideoHistory({
+                                    ...historyItem,
+                                    notes: newNotes,
+                                    lastAccessedAt: new Date().toISOString()
+                                  });
+                                  
+                                  console.log('Updated history with notes');
+                                }
+                              } catch (historyError) {
+                                console.error('Error updating history with notes:', historyError);
+                                // Continue without failing if history update fails
+                              }
+                            }, 1500); // Save after 1.5s of inactivity
                           }
-                        }, 1500); // Save after 1.5s of inactivity
-                      }
-                    }}
-                    screenshots={screenshots}
-                    transcriptAnalysis={transcriptAnalysis}
-                    transcript={transcript}
-                  />
-                </div>
-              </div>
+                        }}
+                        screenshots={screenshots}
+                        transcriptAnalysis={transcriptAnalysis}
+                        transcript={transcript}
+                      >
+                        <div className="mt-4">
+                          <label htmlFor="model-select" className="block text-sm font-medium text-gray-700">
+                            AI Model
+                          </label>
+                          <select
+                            id="model-select"
+                            value={selectedModel}
+                            onChange={(e) => setSelectedModel(e.target.value)}
+                            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                          >
+                            {models.map((model) => (
+                              <option key={model} value={model}>
+                                {model}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="mt-4">
+                          <label htmlFor="component-order" className="block text-sm font-medium text-gray-700">
+                            Component Order
+                          </label>
+                          <select
+                            id="component-order"
+                            value={componentOrder}
+                            onChange={(e) => setComponentOrder(e.target.value)}
+                            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                          >
+                            <option value="transcriptFirst">Transcript First</option>
+                            <option value="screenshotsFirst">Screenshots First</option>
+                          </select>
+                        </div>
+                      </NotesManager>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="h-full space-y-4">
+                    <div className="bg-white rounded-lg p-4 border">
+                      <div className="flex flex-col gap-4">
+                        <div className="flex justify-between items-center">
+                          <h2 className="text-xl font-bold">Transcript Controls</h2>
+                          {transcript.length > 0 && (
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => handleAnalysisGenerated(transcript)}
+                                className="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm"
+                                disabled={isAnalyzing}
+                              >
+                                {isAnalyzing ? 'Generating...' : 'Generate Outline'}
+                              </button>
+                              <button
+                                onClick={() => setIsTranscriptVisible(!isTranscriptVisible)}
+                                className="bg-orange-500 hover:bg-orange-600 text-white px-3 py-1 rounded text-sm"
+                              >
+                                {isTranscriptVisible ? 'Hide Transcript' : 'Show Transcript'}
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                        {transcript.length > 0 && (
+                          <TranscriptPrompt onSubmit={handlePromptSubmit} />
+                        )}
+                      </div>
+                    </div>
+
+                    {isTranscriptVisible && (
+                      <TranscriptViewer
+                        transcript={transcript}
+                        currentTime={currentTime}
+                        onTimeClick={(time) => player?.seekTo(time)}
+                        onAnalysisGenerated={handleAnalysisGenerated}
+                        className="bg-white rounded-lg h-[600px] overflow-auto"
+                      />
+                    )}
+
+                    <div className="mt-4">
+                      <NotesManager
+                        title="Notes & Export Options"
+                        showButtonText={isNotesVisible => 
+                          isNotesVisible ? 'Hide Notes & Export Options' : 'Show Notes & Export Options'
+                        }
+                        videoId={videoId}
+                        videoTitle={videoInfo?.title}
+                        videoDescription={videoInfo?.description}
+                        notes={notes}
+                        onNotesChange={(newNotes) => {
+                          setNotes(newNotes);
+                          
+                          // Also save to history if video ID is available
+                          if (videoId) {
+                            // Use a debounced approach to avoid too many API calls
+                            if (window.notesSaveTimeout) {
+                              clearTimeout(window.notesSaveTimeout);
+                            }
+                            window.notesSaveTimeout = setTimeout(async () => {
+                              try {
+                                // Get current history item
+                                const historyItem = await getVideoHistoryItem(videoId).catch(() => null);
+                                
+                                if (historyItem) {
+                                  // Update history item with notes
+                                  await addOrUpdateVideoHistory({
+                                    ...historyItem,
+                                    notes: newNotes,
+                                    lastAccessedAt: new Date().toISOString()
+                                  });
+                                  
+                                  console.log('Updated history with notes');
+                                }
+                              } catch (historyError) {
+                                console.error('Error updating history with notes:', historyError);
+                                // Continue without failing if history update fails
+                              }
+                            }, 1500); // Save after 1.5s of inactivity
+                          }
+                        }}
+                        screenshots={screenshots}
+                        transcriptAnalysis={transcriptAnalysis}
+                        transcript={transcript}
+                      >
+                        <div className="mt-4">
+                          <label htmlFor="model-select" className="block text-sm font-medium text-gray-700">
+                            AI Model
+                          </label>
+                          <select
+                            id="model-select"
+                            value={selectedModel}
+                            onChange={(e) => setSelectedModel(e.target.value)}
+                            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                          >
+                            {models.map((model) => (
+                              <option key={model} value={model}>
+                                {model}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="mt-4">
+                          <label htmlFor="component-order" className="block text-sm font-medium text-gray-700">
+                            Component Order
+                          </label>
+                          <select
+                            id="component-order"
+                            value={componentOrder}
+                            onChange={(e) => setComponentOrder(e.target.value)}
+                            className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                          >
+                            <option value="transcriptFirst">Transcript First</option>
+                            <option value="screenshotsFirst">Screenshots First</option>
+                          </select>
+                        </div>
+                      </NotesManager>
+                    </div>
+                  </div>
+                  <div className="space-y-4 flex flex-col">
+                    <div>
+                      <EnhancedScreenshotManager
+                        videoId={videoId}
+                        player={player}
+                        transcript={transcript}
+                        onScreenshotsTaken={handleScreenshotsTaken}
+                        customPrompt={customPrompt}
+                        detectedScenes={detectedScenes}
+                        onScenesDetected={setDetectedScenes}
+                      />
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </>
