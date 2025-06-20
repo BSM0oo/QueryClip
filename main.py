@@ -1658,7 +1658,7 @@ async def get_models():
     return {
         "models": [
             "claude-3-haiku-20240307",
-            "gemini-1.5-flash",
+            "models/gemini-2.5-flash-lite-preview-06-17",
         ]
     }
 
