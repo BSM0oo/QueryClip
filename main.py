@@ -228,7 +228,7 @@ class CaptionRequest(BaseModel):
     image_data: str
     transcript_context: str
     prompt: Optional[str] = None
-    model: Optional[str] = "claude-3-haiku-20240307"
+    model: Optional[str] = "gemini-1.5-flash-latest"
 
 class VideoFrameAnalysisRequest(BaseModel):
     video_id: str
@@ -246,19 +246,19 @@ class QuestionRequest(BaseModel):
     transcript: str
     question: str
     timestamp: float
-    model: Optional[str] = "claude-3-haiku-20240307"
+    model: Optional[str] = "gemini-1.5-flash-latest"
 
 class TranscriptAnalysisRequest(BaseModel):
     transcript: List[Dict[str, Any]]
     videoId: Optional[str] = None
-    model: Optional[str] = "claude-3-haiku-20240307"
+    model: Optional[str] = "gemini-1.5-flash-latest"
 
 # Add this class with the existing BaseModel classes
 class TranscriptQueryRequest(BaseModel):
     transcript: list
     prompt: str
     videoId: Optional[str] = None
-    model: Optional[str] = "claude-3-5-sonnet-20240620"
+    model: Optional[str] = "gemini-1.5-flash-latest"
     
 class NotionSaveRequest(BaseModel):
     title: str
@@ -1106,7 +1106,7 @@ Caption:"""
             # Apply rate limiting before making API call
             await anthropic_rate_limiter.wait_if_needed()
             
-            if "gemini" in screenshot.model:
+            if screenshot.model and "gemini" in screenshot.model:
                 model = genai.GenerativeModel(screenshot.model)
                 response = model.generate_content(prompt)
                 caption = response.text
@@ -1221,18 +1221,23 @@ async def analyze_transcript(request: TranscriptAnalysisRequest):
             
         transcript_text = "\n".join(formatted_transcript)
 
-        prompt = f"""Please generate a concise, well-structured outline of the following video transcript. The outline should be in markdown format, using nested bullet points to represent the structure of the content.
+        prompt = f"""Analyze this video transcript and provide:
+                
+                1. A high-level summary of the main topics in bullet points
+                2. Key points and takeaways, comprehensive (bullet points)
+                3. Comprehensive hierarchically organized outline with summarized content under each topic or subtopic - retains meaning from original text / doesn't just allude to discussion about x, instead provide the summarized meat
+                3. Any important technical terms or concepts mentioned, with accompanying definitions and context
+                4. Suggested sections/timestamps for review and rationale for this recommendation
+                - Review your output before finalizing to ensure you have followed these instructions exactly
+                - Generate a title for the video and begin your output with the title in bold
+
 
 Transcript:
 {transcript_text}
 
 Outline:"""
 
-        if "gemini" in request.model:
-            model = genai.GenerativeModel(request.model)
-            response = model.generate_content(prompt)
-            analysis = response.text
-        else:
+        if request.model and "claude" in request.model:
             response = anthropic.messages.create(
                 model=request.model,
                 max_tokens=1000,
@@ -1241,8 +1246,13 @@ Outline:"""
                     "content": prompt
                 }]
             )
-            
             analysis = response.content[0].text.strip()
+        else:
+            # Default to Gemini or use provided Gemini model
+            model_name = request.model if request.model else "gemini-1.5-flash-latest"
+            model = genai.GenerativeModel(model_name)
+            response = model.generate_content(prompt)
+            analysis = response.text
         
         # Extract video ID from context if available
         # Assuming the request might contain a videoId property
@@ -1277,7 +1287,7 @@ Please provide a clear, concise answer that:
 4. Is formatted in a clear, readable way
 
 Answer:"""
-        if "gemini" in request.model:
+        if request.model and "gemini" in request.model:
             model = genai.GenerativeModel(request.model)
             response = model.generate_content(prompt)
             answer = response.text
@@ -1360,7 +1370,7 @@ Response:"""
             # Apply rate limiting before making API call
             await anthropic_rate_limiter.wait_if_needed()
             
-            if "gemini" in request.model:
+            if request.model and "gemini" in request.model:
                 model = genai.GenerativeModel(request.model)
                 response = model.generate_content(prompt)
                 answer = response.text
@@ -1572,7 +1582,7 @@ Follow these rules at all costs.
             # Apply rate limiting before making API call
             await anthropic_rate_limiter.wait_if_needed()
             
-            if "gemini" in screenshot.model:
+            if screenshot.model and "gemini" in screenshot.model:
                 model = genai.GenerativeModel(screenshot.model)
                 response = model.generate_content(prompt)
                 caption = response.text
@@ -1658,7 +1668,7 @@ async def get_models():
     return {
         "models": [
             "claude-3-haiku-20240307",
-            "gemini-1.5-flash",
+            "gemini-2.5-flash-lite-preview-06-17",
         ]
     }
 
